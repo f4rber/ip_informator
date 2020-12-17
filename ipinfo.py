@@ -33,7 +33,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def domains(ip_addr):
-    print(Fore.RESET + "\nGetting info from https://reverseip.domaintools.com for ip: " + str(ip_addr))
+    print(Fore.RESET + "\nGetting domain info for ip: " + str(ip_addr))
     send1 = http.request("GET", "https://reverseip.domaintools.com/search/?q=" + str(ip_addr))
     parsing = BeautifulSoup(send1.data.decode('utf-8'), features="html.parser")
     for data in parsing.find_all("span", title=str(ip_addr)):
@@ -55,7 +55,7 @@ def domains(ip_addr):
             if subdomain_list is not None:
                 for subdomain in subdomain_list:
                     try:
-                        print(Fore.GREEN + "Found domain: ", str(subdomain))
+                        print(Fore.GREEN + "Found subdomain: ", str(subdomain))
 
                         file = open("domain_report/" + str(ip_addr) + ".domains.txt", "a")
                         file.write("\n" + str(subdomain))
