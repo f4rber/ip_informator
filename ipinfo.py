@@ -28,7 +28,7 @@ header = {
     'Accept': '*/*',
     'Connection': 'keep-alive'
 }
-http = urllib3.PoolManager(2, headers=header)
+http = urllib3.PoolManager(2, headers=header, cert_reqs=False)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
