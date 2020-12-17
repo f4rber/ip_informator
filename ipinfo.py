@@ -28,20 +28,40 @@ header = {
     'Accept': '*/*',
     'Connection': 'keep-alive'
 }
-http = urllib3.PoolManager(2, headers=header, cert_reqs=False)
+http = urllib3.PoolManager(2, headers=header)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def domains(ip_addr):
     print(Fore.RESET + "\nGetting info from https://reverseip.domaintools.com for ip: " + str(ip_addr))
-    send = http.request("GET", "https://reverseip.domaintools.com/search/?q=" + str(ip_addr))
-    parsing = BeautifulSoup(send.data.decode('utf-8'), features="html.parser")
+    send1 = http.request("GET", "https://reverseip.domaintools.com/search/?q=" + str(ip_addr))
+    parsing = BeautifulSoup(send1.data.decode('utf-8'), features="html.parser")
     for data in parsing.find_all("span", title=str(ip_addr)):
         if data.string is not None:
             print(Fore.GREEN + "Found domain: ", data.string)
             file = open("domain_report/" + str(ip_addr) + ".domains.txt", "a")
             file.write(str(data.string))
             file.close()
+
+            send2 = http.request("GET", "https://dns.bufferover.run/dns?q=" + data.string)
+            try:
+                parsing = send2.data.decode('utf-8')
+            except Exception as exc:
+                print(Fore.RESET + "Error:\n" + str(exc) + "Trying latin-1...")
+                parsing = send2.data.decode('latin-1')
+
+            json_response = json.loads(parsing)
+            subdomain_list = json_response['FDNS_A']
+            if subdomain_list is not None:
+                for subdomain in subdomain_list:
+                    try:
+                        print(Fore.GREEN + "Found domain: ", str(subdomain))
+
+                        file = open("domain_report/" + str(ip_addr) + ".domains.txt", "a")
+                        file.write("\n" + str(subdomain))
+                        file.close()
+                    except:
+                        pass
 
 
 def whois(ip_addr):
