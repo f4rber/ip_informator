@@ -12,6 +12,8 @@ Default values:
 
 -f - ip_list.txt
 -m - all
+
+Use python3 ipinfo.py -m help to see this message
 ```
 
 ![Screenshot](screen.png)
