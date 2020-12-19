@@ -1,16 +1,22 @@
 import os
 import json
+import time
 import random
 import urllib3
 import argparse
+import threading
 from colorama import Fore
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
 from multiprocessing import Pool, Process, freeze_support
 
 num_threads = 5
 
 ips = []
+
+domain_list = []
 
 ua = ['Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; zh-cn) Opera 8.65',
       'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; en) Opera 8.50',
@@ -32,25 +38,71 @@ http = urllib3.PoolManager(2, headers=header)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+threadLocal = threading.local()
+
+
+def get_driver():
+    driver = getattr(threadLocal, 'driver', None)
+    if driver is None:
+        options = Options()
+        options.headless = True
+        driver = webdriver.Firefox(options=options)
+        setattr(threadLocal, 'driver', driver)
+    return driver
+
+
+def whois_history():
+    # options = Options()
+    # options.headless = True
+    # browser = webdriver.Firefox(options=options)
+    browser = get_driver()
+
+    for dom in domain_list:
+        print(Fore.RESET + "\nGetting whois history for domain: " + dom)
+        html_source = ''
+
+        browser.get("https://viewdns.info/iphistory/?domain=" + dom)
+        time.sleep(4)
+        html_source = browser.page_source
+        parsing = BeautifulSoup(html_source, features="html.parser")
+
+        for table in parsing.find_all("table", border="1"):
+            trs = table.find_all('tr')
+
+            for tr in trs:
+                td = tr.findAll('td')
+                info = {'ip': td[0].text, 'owner': td[2].text.rstrip(), 'last': td[3].text}
+                print(Fore.GREEN + '\t' + info['ip'] + ', ' + info['owner'] + ' (' + info['last'] + ')')
+
+                file = open("domain_report/" + str(dom) + ".whoishistory.txt", "a")
+                file.write(str("\n" + '\t' + info['ip'] + ', ' + info['owner'] + ' (' + info['last'] + ')'))
+                file.close()
+
+    browser.close()
+
+
 def domains(ip_addr):
     print(Fore.RESET + "\nGetting domain info for ip: " + str(ip_addr))
+    # Domains
     send1 = http.request("GET", "https://reverseip.domaintools.com/search/?q=" + str(ip_addr))
-    parsing = BeautifulSoup(send1.data.decode('utf-8'), features="html.parser")
-    for data in parsing.find_all("span", title=str(ip_addr)):
+    parsing2 = BeautifulSoup(send1.data.decode('utf-8'), features="html.parser")
+    for data in parsing2.find_all("span", title=str(ip_addr)):
         if data.string is not None:
             print(Fore.GREEN + "Found domain: ", data.string)
             file = open("domain_report/" + str(ip_addr) + ".domains.txt", "a")
             file.write(str(data.string))
             file.close()
 
+            domain_list.append(data.string)
+
+            # Subdomains
             send2 = http.request("GET", "https://dns.bufferover.run/dns?q=" + data.string)
             try:
-                parsing = send2.data.decode('utf-8')
+                parsing3 = send2.data.decode('utf-8')
             except Exception as exc:
                 print(Fore.RESET + "Error:\n" + str(exc) + "Trying latin-1...")
-                parsing = send2.data.decode('latin-1')
-
-            json_response = json.loads(parsing)
+                parsing3 = send2.data.decode('latin-1')
+            json_response = json.loads(parsing3)
             subdomain_list = json_response['FDNS_A']
             if subdomain_list is not None:
                 for subdomain in subdomain_list:
@@ -65,6 +117,8 @@ def domains(ip_addr):
 
 
 def whois(ip_addr):
+    print(Fore.RESET + "\nGetting whois info for ip: " + str(ip_addr))
+
     result = {}
     info = IPWhois(ip_addr).lookup_rdap(depth=1)
     result['info'] = info
@@ -77,8 +131,6 @@ def whois(ip_addr):
     file = open("whois_report/" + str(ip_addr) + ".whois.json", "w")
     file.write(str(json_beauty))
     file.close()
-
-    print(Fore.RESET + "\nGetting whois info for ip: " + str(ip_addr))
 
 
 def dorks(ip_addr):
@@ -127,13 +179,16 @@ if __name__ == '__main__':
     if args.mode == "dork":
         for addr in ips:
             dorks(addr)
-        print(Fore.YELLOW + "\nAll found data was write in 'dorker_report' folder")
+        print(Fore.YELLOW + "\nAll found data was written in 'dorker_report' folder")
         print(Fore.RESET + " ")
 
     elif args.mode == "domain":
         for addr in ips:
             domains(addr)
-        print(Fore.YELLOW + "\nAll found data was write in 'domain_report' folder")
+
+        whois_history()
+
+        print(Fore.YELLOW + "\nAll found data was written in 'domain_report' and 'whois_report' folder")
         print(Fore.RESET + " ")
 
     elif args.mode == "whois":
@@ -143,13 +198,15 @@ if __name__ == '__main__':
         pool_whois.close()
         pool_whois.join()
 
-        print(Fore.YELLOW + "\nAll found data was write in 'whois_report' folder")
+        print(Fore.YELLOW + "\nAll found data was written in 'whois_report' folder")
         print(Fore.RESET + " ")
 
     elif args.mode == "all":
         for addr in ips:
             dorks(addr)
             domains(addr)
+
+        whois_history()
 
         freeze_support()
         pool_whois = Pool(num_threads)
