@@ -1,5 +1,7 @@
 # IP Informator
 
+Gather whois, whois history, domains, subdomains and search results from various sources
+
 ```
 Choose one of four modes:
 
